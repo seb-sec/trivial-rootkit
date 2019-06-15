@@ -6,9 +6,9 @@
 #include <linux/kernel.h>		/* used by KERN_INFO and others */
 #include <linux/init.h>			/* used for macros */
 
-MODULE_LICENCE("GPL");
+MODULE_LICENSE("GPL");
 MODULE_AUTHOR("me");
-MODULE_DESCRIPTION("simple module")
+MODULE_DESCRIPTION("simple module");
 
 /* function called on module initialisation */
 int __init hello_1_init(void) {
