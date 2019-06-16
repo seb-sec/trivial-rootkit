@@ -119,7 +119,7 @@ static ssize_t trivial_write(struct file *f, const char *buff, size_t len, loff_
  */
 static ssize_t trivial_read(struct file *f, char *buff, size_t length, loff_t *offset) {
 	printk(KERN_INFO "Read performed on inconspicuous device\n");
-	return length;
+	return 0;		// signal EOF for now
 }
 
 
