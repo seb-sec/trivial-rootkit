@@ -8,7 +8,7 @@
 #include <linux/fs.h>			/* used for filesystem stuff */
 #include <linux/uaccess.h>		/* required to include <asm/uaccess.h> */
 #include <asm/uaccess.h>		/* for handling data to userland buffers */
-
+#include <linux/device.h>		/* for class/device creation */
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("me");
@@ -16,8 +16,8 @@ MODULE_DESCRIPTION("simple module");
 MODULE_VERSION("0.0.1");
 
 /* prototypes */
-int __init innocent_init(void);
-void __exit innocent_exit(void);
+int __init trivial_init(void);
+void __exit trivial_exit(void);
 static int trivial_open(struct inode *, struct file *);
 static int trivial_close(struct inode *, struct file *);
 static ssize_t trivial_write(struct file *, const char *, size_t, loff_t *);
@@ -26,11 +26,13 @@ static ssize_t trivial_read(struct file *, char *, size_t, loff_t *);
 
 /* useful defines */
 #define DEVICE_NAME "not_a_rootkit"		// name appears in /proc/devices
-
+#define CLASS_NAME 	"not_a"
 
 /* globals (within this file) */
 static int majorNum;					// device major number assigned
 static int deviceOpen = 0;				// track if device open, may be useful later
+static struct class *devClass = NULL;
+static struct device *devStruct = NULL;
 
 /* used to store any data aquired, given back during a read()- needs to be allocated */
 static char *deviceBuf = NULL;			
@@ -54,8 +56,25 @@ int __init trivial_init(void) {
 		printk(KERN_ALERT "Failed to register rootkit chardevice\n");
 		return majorNum;
 	}
-	printk(KERN_INFO "Registered rootkit with the kernel. Thanks kernel\n");
+	
+	/* register the device class */
+	devClass = class_create(THIS_MODULE, CLASS_NAME);
+	if (IS_ERR(devClass)) {
+		unregister_chrdev(majorNum, DEVICE_NAME);
+		printk(KERN_ALERT "Failed to register rootkit char class\n");
+		return -1;		// tmp value
+	}
 
+	/* create the device */
+	devStruct = device_create(devClass, NULL, MKDEV(majorNum, 0), NULL, DEVICE_NAME);
+	if (IS_ERR(devStruct)) {
+		class_destroy(devClass);
+		unregister_chrdev(majorNum, DEVICE_NAME);
+		printk(KERN_ALERT "Failed to create rootkit device\n");
+		return -1;		// tmp value
+	}
+
+	printk(KERN_INFO "Registered rootkit with the kernel. Thanks kernel\n");
 	/* probably a whole lot of stealth work here */
 
 	return 0;
@@ -65,6 +84,9 @@ int __init trivial_init(void) {
 void __exit trivial_exit(void) {
 	
 	/* unregister the device, cover our traces */
+	device_destroy(devClass, MKDEV(majorNum, 0));
+	class_unregister(devClass);
+	class_destroy(devClass);
 	unregister_chrdev(majorNum, DEVICE_NAME);
 }
 
