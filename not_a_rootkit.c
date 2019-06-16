@@ -13,7 +13,7 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("me");
 MODULE_DESCRIPTION("simple module");
-
+MODULE_VERSION("0.0.1");
 
 /* prototypes */
 int __init innocent_init(void);
