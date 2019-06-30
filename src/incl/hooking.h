@@ -7,7 +7,10 @@
 #include <linux/dirent.h>		/* dirent struct */
 #include <asm/page.h>			/* definition of PAGE_OFFSET */
 #include <linux/uaccess.h>		/* required to include <asm/uaccess.h> */
-#include <asm/uaccess.h>
+#include <asm/uaccess.h>		/* copying to/from userland to kernel */
+#include <linux/gfp.h>			/* GFP defines */
+#include <linux/string.h>		/* string functions */
+#include <linux/slab.h>			/* kernel memory allocation */
 
 unsigned long *find_syscall_table (void);
 

